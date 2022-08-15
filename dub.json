@@ -1,0 +1,10 @@
+{
+	"authors": [
+		"Andrew Lalis"
+	],
+	"copyright": "Copyright © 2022, Andrew Lalis",
+	"description": "Text-based table generator.",
+	"license": "MIT",
+	"name": "tabular",
+	"targetType": "library"
+}
