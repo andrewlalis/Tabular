@@ -1,59 +1,7 @@
 module tabular.render;
 
 import tabular.util;
-
-/** 
- * Configuration properties that affect how a table is rendered.
- */
-public struct TableConfig {
-    /** 
-     * Whether to render borders around table cells.
-     */
-    bool borders;
-
-    /** 
-     * Whether to apply a thicker border to underline the first (header) row.
-     */
-    bool indicateHeader;
-
-    /** 
-     * Padding to apply to each table cell's contents.
-     */
-    Insets padding;
-
-    /** 
-     * A set of column-specific configuration properties to apply to all cells
-     * in that column.
-     */
-    ColumnConfig[uint] columnConfigs;
-
-    public static TableConfig defaultValues() {
-        TableConfig cfg;
-        cfg.borders = true;
-        cfg.indicateHeader = false;
-        cfg.padding = Insets(0, 0, 1, 1);
-        return cfg;
-    }
-
-    public static struct Insets {
-        uint top;
-        uint bottom;
-        uint left;
-        uint right;
-    }
-
-    public static struct ColumnConfig {
-        public static enum TextAlign {LEFT, RIGHT, CENTER}
-
-        TextAlign textAlign;
-
-        public static ColumnConfig defaultValues() {
-            ColumnConfig cfg;
-            cfg.textAlign = TextAlign.LEFT;
-            return cfg;
-        }
-    }
-}
+import tabular.config;
 
 /** 
  * Builder class for preparing and rendering text-based tables. Contains some
@@ -64,12 +12,14 @@ public class TableBuilder {
 
     private Appender!string app;
     private string[][] data;
+    private RefAppender!(string[][]) rowAppender;
     private TableConfig config;
 
     public this(Appender!string app, string[][] data, TableConfig config) {
         this.app = app;
         this.data = data;
         this.config = config;
+        this.rowAppender = appender(&this.data);
     }
 
     public this() {
@@ -81,8 +31,23 @@ public class TableBuilder {
         return this;
     }
 
+    public TableBuilder withRow(string[] row) {
+        this.rowAppender ~= row;
+        return this;
+    }
+
     public TableBuilder withConfig(TableConfig config) {
         this.config = config;
+        return this;
+    }
+
+    public TableBuilder bordered(bool bordered = true) {
+        this.config.borders = true;
+        return this;
+    }
+
+    public TableBuilder indicateHeader(bool indicateHeader = true) {
+        this.config.indicateHeader = indicateHeader;
         return this;
     }
 
@@ -157,13 +122,10 @@ package class TableRenderer {
                 if (col < linedValues.length && line < linedValues[col].length) {
                     string c = linedValues[col][line];
                     size_t emptySpace = colSize - c.length;
-                    TableConfig.ColumnConfig columnConfig = cast(uint) col in config.columnConfigs
-                        ? config.columnConfigs[cast(uint) col]
-                        : TableConfig.ColumnConfig.defaultValues();
-                    alias ALGN = TableConfig.ColumnConfig.TextAlign;
-                    if (columnConfig.textAlign == ALGN.LEFT) {
+                    ColumnConfig columnConfig = config.getColumnConfig(cast(uint) col);
+                    if (columnConfig.textAlign == TextAlign.LEFT) {
                         content = c ~ replicate(" ", emptySpace);
-                    } else if (columnConfig.textAlign == ALGN.RIGHT) {
+                    } else if (columnConfig.textAlign == TextAlign.RIGHT) {
                         content = replicate(" ", emptySpace) ~ c;
                     } else {
                         size_t left = emptySpace / 2;
@@ -205,4 +167,57 @@ package class TableRenderer {
             output ~= '\n';
         }
     }
+}
+
+unittest {
+    import std.stdio;
+
+    TableConfig cfgBordered = TableConfig.defaultValues();
+    TableConfig cfgUnbordered = TableConfig.defaultValues();
+    cfgUnbordered.borders = false;
+
+    string tbl1 = new TableBuilder()
+        .withConfig(cfgBordered)
+        .withRow(["a", "b", "c"])
+        .build();
+    assert(
+        "+---+---+---+\n" ~
+        "| a | b | c |\n" ~
+        "+---+---+---+" == tbl1
+    );
+    string tbl2 = new TableBuilder()
+        .withConfig(cfgUnbordered)
+        .withRow(["a", "b", "c"])
+        .withRow(["d", "e", "f"])
+        .build();
+    assert(
+        " a  b  c \n" ~
+        " d  e  f " == tbl2
+    );
+    string tbl3 = new TableBuilder()
+        .withConfig(cfgBordered)
+        .withRow(["a", "bc", "def"])
+        .withRow(["ghi", "jk", "l"])
+        .build();
+    assert(
+        "+-----+----+-----+\n" ~
+        "| a   | bc | def |\n" ~
+        "+-----+----+-----+\n" ~
+        "| ghi | jk | l   |\n" ~
+        "+-----+----+-----+" == tbl3
+    );
+    TableConfig cfg3 = TableConfig.defaultValues();
+    cfg3.columnConfigs[0] = ColumnConfig(TextAlign.RIGHT);
+    string tbl4 = new TableBuilder()
+        .withConfig(cfg3)
+        .withRow(["a", "bc", "def"])
+        .withRow(["ghi", "jk", "l"])
+        .build();
+    assert(
+        "+-----+----+-----+\n" ~
+        "|   a | bc | def |\n" ~
+        "+-----+----+-----+\n" ~
+        "| ghi | jk | l   |\n" ~
+        "+-----+----+-----+" == tbl4
+    );
 }
