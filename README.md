@@ -15,7 +15,7 @@ void main() {
     string myTable = new TableBuilder().withData(data).build();
     writeln(myTable);
     // Or use a simplified function call
-    writeln(renderTable(myTable));
+    writeln(renderTable(data));
     /* Output:
     +--------+-----+------------+
     | name   | age | profession |
